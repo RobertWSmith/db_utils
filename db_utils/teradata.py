@@ -7,8 +7,11 @@ Created on Fri Apr 10 00:18:18 2015
 
 from db_utils.base import ABC_Database
 
-
 import pyodbc
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Teradata(ABC_Database):
@@ -35,17 +38,19 @@ class Teradata(ABC_Database):
             autocommit bool optional (default True)
             timeout int optional (default 0 - no timeout)
         """
+        logger.info('Teradata initializer called')
         self.dsn = str(dsn)
         self.uid = str(uid)
         self.pwd = str(pwd)
+        logger.debug('dsn={dsn}, uid={uid}, pwd={pwd}'.format(dsn=self.dsn, uid=self.uid, pwd=self.pwd))
 
         self.driver = kwargs.get("driver", None)
-
         self.autocommit = kwargs.get("autocommit", None)
         self.timeout = kwargs.get("timeout", None)
         self._connect = None
 
     def __del__(self):
+        logger.info('Teradata Delete method called')
         self.close()
         for key,value in self.__dict__.items():
             setattr(self, key, None)
@@ -54,11 +59,14 @@ class Teradata(ABC_Database):
         """\
         Closes the databse connection if open and flags the connection object as non-existant
         """
+        logger.info('Teradata Close method called')
         try:
             self._connect.close()
         except (pyodbc.ProgrammingError, AttributeError):
+            logger.warning('Exception raised indicating connection was already closed')
             pass
         except:
+            logger.critical("Unhandled excption encountered")
             raise
         finally:
             self._connect = None
@@ -72,6 +80,7 @@ class Teradata(ABC_Database):
         for key, value in output.items():
             if value is None:
                 del output[key]
+        logger.debug(str(output))
         return output
 
     @property
@@ -80,6 +89,7 @@ class Teradata(ABC_Database):
         Returns a connection object, saves pre-existing connection or generates new connection if none exists
         """
         if self._connect is None:
+            logger.info('New connection created')
             self._connect = pyodbc.connect(**self.conn_dict)
         return self._connect
 
@@ -88,6 +98,21 @@ class Teradata(ABC_Database):
         """\
         Creates a new database cursor for consumption
         """
+        logger.info('New cursor created')
         return self.connect.cursor()
 
+    def execute(self, sql, *args):
+        logger.info('Access execute method called')
+        logger.debug('SQL: \n {0}'.format(sql))
+        if len(tuple((arg for arg in args))) > 0:
+            logger.debug('Parameters: {0}'.format(', '.join(list([str(a) for a in args]))))
+            return self.cursor.execute(sql, *args)
+        else:
+            return self.cursor.execute(sql)
+
+    def executemany(self, sql, *args):
+        logger.info('Access execute method called')
+        logger.debug('SQL: \n {0}'.format(sql))
+        logger.debug('Parameters: {0}'.format(', '.join(list([str(a) for a in args]))))
+        return self.cursor.executemany(sql, *args)
 
