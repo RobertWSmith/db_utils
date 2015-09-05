@@ -37,49 +37,47 @@ class Access(ABC_Database):
         """\
         Initialize the AccessDB object
 
-        Keyword Arguments:
+        Keyword Arguments::
             dbq string full file path to ms access database
             background_ind bool True indicates for Access to run in background, False runs Access in the foreground
             autocommit bool optional (default True)
             timeout int optional (default 0 - no timeout)
-
         """
-        logger.info('Access object initialization')
-
-        self.dbq = os.path.normpath(dbq)
-        logger.debug('dbq member set to {0}'.format(dbq))
+#        logger.debug('Access object initialized')
+        input_dict = dict({key: value for key, value in kwargs.items()})
+        input_dict['dbq'] = os.path.normpath(dbq)
+        input_dict['driver'] = kwargs.get("driver", "Microsoft Access Driver (*.mdb, *.accdb)")
+        input_dict['autocommit'] = kwargs.get("autocommit", False)
+        input_dict['timeout'] = kwargs.get("timeout", 30)
+        super().__init__(**input_dict)
 
         reg_path = "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\MSACCESS.EXE"
-#       find local access EXE file
+
         key = win32api.RegOpenKey(win32con.HKEY_LOCAL_MACHINE, reg_path)
         value = win32api.RegQueryValueEx(key, None)
-
-        self.driver = kwargs.get("driver", "Microsoft Access Driver (*.mdb, *.accdb)")
         self.access_exe = os.path.normpath(value[0])
-        self.autocommit = kwargs.get("autocommit", False)
-        self.timeout = kwargs.get("timeout", 30)
-        self._connect = None
-        self._access_app = None
+        del value
+        del key
 
     def __del__(self):
-        logger.info('Access object delete method called')
+        logger.debug('Access object delete method called')
         self.close()
-        for key,value in self.__dict__.items():
-            setattr(self, key, None)
+#        for key,value in self.__dict__.items():
+#            setattr(self, key, None)
 
     def close(self):
         """\
         Closes the databse connection if open and flags the connection object as non-existant
         """
-        logger.info('Access object close method called')
+        logger.debug('Access object close method called')
         try:
             self._connect.close()
         except (pyodbc.ProgrammingError, AttributeError):
-            logger.error('Closing Exception Ignored -- No Connection Found')
+            logger.debug('Closing Exception Ignored -- No Connection Found')
             pass
-        except Exception:
-            logger.critical('Exception raised in Access.close()')
-            raise
+        except Exception as e:
+            logger.error('Exception {0} raised in Access.close()'.format(str(e)))
+            pass
         finally:
             self._connect = None
 
@@ -90,7 +88,7 @@ class Access(ABC_Database):
         """
         if self._connect is None:
             self._connect = pyodbc.connect(driver = self.driver, dbq = self.dbq, autocommit=self.autocommit, timeout=self.timeout)
-            logger.info('Connection to database {0} created'.format(self.dbq))
+            logger.debug('Connection to database {0} created'.format(self.dbq))
         return self._connect
 
     @property
@@ -98,11 +96,11 @@ class Access(ABC_Database):
         """\
         Creates a new database cursor for consumption
         """
-        logger.info('New cursor created')
+        logger.debug('New cursor created')
         return self.connect.cursor()
 
     def execute(self, sql, *args):
-        logger.info('Access execute method called')
+        logger.debug('Access execute method called')
         logger.debug('SQL: \n {0}'.format(sql))
         if len(tuple((arg for arg in args))) > 0:
             logger.debug('Parameters: {0}'.format(', '.join(list([a for a in args]))))
@@ -111,9 +109,9 @@ class Access(ABC_Database):
             return self.cursor.execute(sql)
 
     def executemany(self, sql, *args):
-        logger.info('Access execute method called')
+        logger.debug('Access execute method called')
         logger.debug('SQL: \n {0}'.format(sql))
-        logger.debug('Parameters: {0}'.format(', '.join(list([a for a in args]))))
+#        logger.debug('Parameters: {0}'.format(', '.join(list([a for a in args]))))
         return self.cursor.executemany(sql, *args)
 
     @staticmethod
@@ -128,17 +126,13 @@ class Access(ABC_Database):
         Return Value:
             New AccessDB object pointing to newly created database
         """
-        logger.info('Create New Access Database Method Called')
+        logger.debug('Create New Access Database: %s', path)
         logger.debug('dbq = {0}'.format(path))
         if delete_if_exists:
             logger.debug('Delete If Exists Option Called')
             if os.path.isfile(path):
                 logger.debug('Previous DB removed')
                 os.remove(path)
-        else:
-            if os.path.isfile(path):
-                logger.critical('Tried to overwrite existing database file without attempting to remove')
-                raise FileExistsError
 
         access_app = win32com.client.DispatchEx("Access.Application")
         access_app.visible = False
@@ -154,7 +148,7 @@ class Access(ABC_Database):
         """\
         Compacts & Repairs existing MS Access database using command line argument.
         """
-        logger.info('Compact Access Database method called')
+        logger.debug('Compact Access Database method called')
         logger.debug('current database: {0}'.format(self.dbq))
         temp_file = os.path.split(self.dbq)
         temp_file = os.path.join(temp_file[0], '_'.join(['temp', temp_file[1]]))
@@ -164,10 +158,10 @@ class Access(ABC_Database):
             access_app.visible = False
             access_app.DBEngine.CompactDatabase(self.dbq, temp_file)
         except pywintypes.com_error:
-            logger.warning("Couldn't gain exclusive access to {0}".format(self.dbq))
+            logger.debug("Couldn't gain exclusive access to {0} - compacting did not occur.".format(self.dbq))
             pass
         except Exception:
-            logger.critical('Unhandled exception raised')
+            logger.critical('Unhandled exception raised in db_utils.Access.compact_accdb()')
             raise
         finally:
             access_app.quit()

@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Apr 10 00:18:18 2015
+Created on Tue Jun 23 21:40:35 2015
 
 @author: Robert Smith
 """
 
 from db_utils.base import ABC_Database
 
+import os
 import pyodbc
 
 import logging
@@ -14,9 +15,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class Teradata(ABC_Database):
+class SQLite(ABC_Database):
     """\
-    Teradata Database interaction object
+    MS Access Database interaction object
 
     Members:
         driver string text for system installed driver
@@ -27,8 +28,9 @@ class Teradata(ABC_Database):
         create_accdb creates new MS Access db and returns new Access object pointing to the database
     """
     _connect = None
+    _connection_keywords = ('dsn', 'dbq', 'database', 'uid', 'pwd', 'autocommit', 'ansi', 'unicode_results', 'readonly', 'timeout', 'driver')
 
-    def __init__(self, dsn, uid, pwd, **kwargs):
+    def __init__(self, database, **kwargs):
         """\
         Initialize the Teradata connection object
 
@@ -39,14 +41,19 @@ class Teradata(ABC_Database):
             autocommit bool optional (default True)
             timeout int optional (default 0 - no timeout)
         """
-        logger.info('Teradata initializer called')
-        input_dict = {key: value for key, value in kwargs.items()}
-        input_dict['dsn'] = str(dsn)
-        input_dict['uid'] = str(uid)
-        input_dict['pwd'] = str(pwd)
-        input_dict['autocommit'] = False
-        input_dict['timeout'] = 0
-        super().__init__(**input_dict)
+        logger.info('SQLite initializer called')
+        inputs = {'timeout': 30, 'driver': "SQLite3 ODBC Driver", 'autocommit': False}
+        inputs.update({key: value for key, value in kwargs.items()})
+        inputs['database'] = os.path.normpath(database)
+
+        _connection_dict = {}
+
+        for key in self.connection_keywords:
+            if key in inputs:
+                _connection_dict[key] = inputs.pop(key)
+
+        inputs['_connection_dict'] = _connection_dict
+        super().__init__(**inputs)
 
     def close(self):
         """\
@@ -70,12 +77,8 @@ class Teradata(ABC_Database):
         Generates connection dictionary to help connection
         """
         logger.info('Connection Dictionary accessed')
-        output = {"dsn": self.dsn, "uid": self.uid, "pwd": self.pwd, "autocommit": self.autocommit, "timeout": self.timeout}
-        for key, value in output.items():
-            if value is None:
-                del output[key]
-        logger.debug(str(output))
-        return output
+        logger.debug(str(self._connection_dict.items()))
+        return self._connection_dict.items()
 
     @property
     def connect(self):
@@ -110,21 +113,4 @@ class Teradata(ABC_Database):
         logger.debug('SQL: \n {0}'.format(sql))
         logger.debug('Parameters: {0}'.format(', '.join(list([str(a) for a in args]))))
         return self.cursor.executemany(sql, *args)
-
-#    def execute_to_txt(self, sql, filepath, *args, **kwargs):
-#        import csv
-#        import os
-#        dialect = kwargs.get('dialect', 'excel-tab')
-#        header = kwargs.get('header', True)
-#
-#        qry = self.execute(sql, *args)
-#        fieldnames = list([v[0] for v in qry.description])
-#        with open(os.path.normpath(filepath), mode='r', newline='') as fp:
-#            wr = csv.DictWriter(fp, fieldnames=fieldnames, dialect=dialect)
-#            if header:
-#                wr.writeheader()
-#            for row in qry:
-#                wr.writerows(row)
-
-
 

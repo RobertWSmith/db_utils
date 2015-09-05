@@ -1,22 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Apr 10 00:18:18 2015
+Created on Thu Aug 20 13:08:16 2015
 
 @author: Robert Smith
 """
 
+
 from db_utils.base import ABC_Database
 
-import pyodbc
+import pyscopg2 as dbc
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class Teradata(ABC_Database):
+class PostgreSQL(ABC_Database):
     """\
-    Teradata Database interaction object
+    PostgreSQL Database interaction object
 
     Members:
         driver string text for system installed driver
@@ -30,7 +31,7 @@ class Teradata(ABC_Database):
 
     def __init__(self, dsn, uid, pwd, **kwargs):
         """\
-        Initialize the Teradata connection object
+        Initialize the PostgreSQL connection object
 
         Keyword Arguments:
             dan string data source name
@@ -39,23 +40,23 @@ class Teradata(ABC_Database):
             autocommit bool optional (default True)
             timeout int optional (default 0 - no timeout)
         """
-        logger.info('Teradata initializer called')
+        logger.info('PostgreSQL initializer called')
         input_dict = {key: value for key, value in kwargs.items()}
         input_dict['dsn'] = str(dsn)
         input_dict['uid'] = str(uid)
         input_dict['pwd'] = str(pwd)
         input_dict['autocommit'] = False
-        input_dict['timeout'] = 0
+        input_dict['timeout'] = 30
         super().__init__(**input_dict)
 
     def close(self):
         """\
         Closes the databse connection if open and flags the connection object as non-existant
         """
-        logger.info('Teradata Close method called')
+        logger.info('PostgreSQL Close method called')
         try:
             self._connect.close()
-        except (pyodbc.ProgrammingError, AttributeError):
+        except (dbc.ProgrammingError, AttributeError):
             logger.info('Exception raised indicating connection was already closed')
             pass
         except:
@@ -78,13 +79,21 @@ class Teradata(ABC_Database):
         return output
 
     @property
+    def sqlalchemy_str(self):
+        return 'postgresql+psycopg2://{uid}:{pwd}@localhost:5432/{uid}'.format(**self.conn_dict)
+
+    @property
+    def sqlalchemy_connect_args(self):
+        return dict({k: v for k, v in self.conn_dict.items() if k not in ('dsn', 'uid', 'pwd')})
+
+    @property
     def connect(self):
         """\
         Returns a connection object, saves pre-existing connection or generates new connection if none exists
         """
         if self._connect is None:
             logger.info('New connection created')
-            self._connect = pyodbc.connect(**self.conn_dict)
+            self._connect = dbc.connect(**self.conn_dict)
         logger.info('Connect property accessed')
         return self._connect
 
@@ -125,6 +134,4 @@ class Teradata(ABC_Database):
 #                wr.writeheader()
 #            for row in qry:
 #                wr.writerows(row)
-
-
 

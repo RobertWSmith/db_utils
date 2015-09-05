@@ -7,5 +7,6 @@ Created on Mon Apr  6 19:43:06 2015
 
 from db_utils.access import Access
 from db_utils.teradata import Teradata
+from db_utils.sqlite import SQLite
 
-__all__ = ['Access', 'Teradata']
+__all__ = ['Access', 'Teradata', 'SQLite']
